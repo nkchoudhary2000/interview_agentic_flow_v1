@@ -1,0 +1,95 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot - Smart Agentic Assistant</title>
+    <link rel="stylesheet" href="{% static 'css/chatbot.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">🤖</div>
+                    <h1>AI Assistant</h1>
+                </div>
+                <div class="mode-indicator" id="modeIndicator">
+                    <span class="mode-badge" id="modeBadge">General Chat</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Chat Container -->
+        <div class="chat-container">
+            <!-- Messages Area -->
+            <div class="messages-container" id="messagesContainer">
+                <!-- Welcome Message -->
+                <div class="welcome-card">
+                    <h2>👋 Welcome to AI Assistant!</h2>
+                    <p>I'm your intelligent assistant powered by cutting-edge AI. I can help you with:</p>
+                    <div class="capabilities-grid">
+                        <div class="capability-card">
+                            <div class="capability-icon">💻</div>
+                            <h3>Code Generation</h3>
+                            <p>Write and review code in any language</p>
+                        </div>
+                        <div class="capability-card">
+                            <div class="capability-icon">📄</div>
+                            <h3>PDF Extraction</h3>
+                            <p>Extract text from PDF documents</p>
+                        </div>
+                        <div class="capability-card">
+                            <div class="capability-icon">📊</div>
+                            <h3>CSV Analysis</h3>
+                            <p>Analyze data with smart suggestions</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <!-- File Upload Area -->
+                <div class="file-upload-zone" id="fileUploadZone">
+                    <input type="file" id="fileInput" accept=".pdf,.csv" hidden>
+                    <div class="file-upload-content">
+                        <div class="upload-icon">📎</div>
+                        <p>Drop PDF or CSV file here, or <span class="upload-link" onclick="document.getElementById('fileInput').click()">browse</span></p>
+                    </div>
+                    <div class="file-preview" id="filePreview" style="display: none;">
+                        <span class="file-name" id="fileName"></span>
+                        <button class="remove-file" id="removeFile">×</button>
+                    </div>
+                </div>
+
+                <!-- Message Input -->
+                <div class="message-input-area">
+                    <textarea 
+                        id="messageInput" 
+                        class="message-input" 
+                        placeholder="Ask me anything... or upload a file!"
+                        rows="1"
+                    ></textarea>
+                    <button class="send-button" id="sendButton">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+    <script src="{% static 'js/chatbot.js' %}"></script>
+</body>
+</html>
