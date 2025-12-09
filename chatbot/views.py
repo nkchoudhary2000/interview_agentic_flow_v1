@@ -221,13 +221,22 @@ def execute_csv_action(request):
         csv_path = request.data.get('csv_path')
         analysis = request.data.get('analysis', {})
         
+        print(f"[DEBUG] execute_csv_action called")
+        print(f"[DEBUG] session_id: {session_id}")
+        print(f"[DEBUG] action_id: {action_id}")
+        print(f"[DEBUG] csv_path: {csv_path}")
+        print(f"[DEBUG] analysis keys: {analysis.keys() if analysis else 'None'}")
+        
         if not all([session_id, action_id, csv_path]):
+            error_msg = f'Missing required fields: session_id={session_id}, action_id={action_id}, csv_path={csv_path}'
+            print(f"[ERROR] {error_msg}")
             return Response(
                 {'error': 'session_id, action_id, and csv_path are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         session = ChatSession.objects.get(id=session_id)
+        print(f"[DEBUG] Session found: {session.id}")
         
         # Execute action using router agent
         router = RouterAgent(
@@ -235,10 +244,14 @@ def execute_csv_action(request):
             base_dir=Path(settings.BASE_DIR)
         )
         
+        print(f"[DEBUG] Calling router.execute_csv_action...")
         result = router.execute_csv_action(csv_path, action_id, analysis)
+        print(f"[DEBUG] Result status: {result.get('status')}")
+        print(f"[DEBUG] Result message: {result.get('message', 'No message')}")
         
         # Create assistant message with result
         assistant_msg = _create_assistant_message(session, result)
+        print(f"[DEBUG] Assistant message created: {assistant_msg.id}")
         
         return Response({
             'assistant_message': ChatMessageSerializer(assistant_msg).data,
@@ -246,13 +259,18 @@ def execute_csv_action(request):
         })
         
     except ChatSession.DoesNotExist:
+        print(f"[ERROR] Session not found: {session_id}")
         return Response(
             {'error': 'Session not found'},
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[ERROR] Exception in execute_csv_action:")
+        print(error_trace)
         return Response(
-            {'error': str(e)},
+            {'error': str(e), 'traceback': error_trace},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -292,7 +310,7 @@ def _create_assistant_message(session, result):
     elif mode == 'csv_analysis':
         content = _format_csv_response(result)
     elif mode == 'csv_action':
-        content = result.get('message', 'Action completed')
+        content = _format_csv_action_response(result)
     else:
         content = result.get('message', 'Response generated')
     
@@ -361,5 +379,34 @@ def _format_csv_response(result):
     suggestions = result.get('suggestions', [])
     for suggestion in suggestions:
         content += f"\n{suggestion.get('id')}. **{suggestion.get('title')}**: {suggestion.get('description')}"
+    
+    return content
+
+
+def _format_csv_action_response(result):
+    """Format CSV action execution response."""
+    if result.get('status') != 'success':
+        return f"Error: {result.get('message', 'Unknown error')}"
+    
+    action_name = result.get('action', 'CSV Action')
+    
+    content = f"""✅ **{action_name} Completed!**
+
+{result.get('output', result.get('summary', 'Action executed successfully'))}
+"""
+    
+    # Add files created if any
+    if result.get('files_created'):
+        content += "\n\n**Files Created:**"
+        for file_path in result['files_created']:
+            from pathlib import Path
+            filename = Path(file_path).name
+            content += f"\n- `{filename}` - {file_path}"
+    
+    # Add log file information
+    if result.get('log_file'):
+        from pathlib import Path
+        log_filename = Path(result['log_file']).name
+        content += f"\n\n**📋 Execution Log:** `{log_filename}`\n*Check the terminal output or log file for detailed execution information.*"
     
     return content

@@ -206,7 +206,8 @@ class ChatbotApp {
             textDiv.innerHTML = this.formatMarkdown(messageData.content);
             const suggestionsDiv = this.createSuggestions(
                 messageData.metadata.suggestions,
-                messageData.metadata.file_path
+                messageData.metadata.file_path,
+                messageData.metadata  // Pass full metadata for later use
             );
             contentDiv.appendChild(textDiv);
             contentDiv.appendChild(suggestionsDiv);
@@ -232,14 +233,14 @@ class ChatbotApp {
         }
     }
 
-    createSuggestions(suggestions, csvPath) {
+    createSuggestions(suggestions, csvPath, fullMetadata) {
         const container = document.createElement('div');
         container.className = 'csv-suggestions';
 
         suggestions.forEach(suggestion => {
             const card = document.createElement('div');
             card.className = 'suggestion-card';
-            card.onclick = () => this.executeCsvAction(suggestion.id, csvPath);
+            card.onclick = () => this.executeCsvAction(suggestion.id, csvPath, fullMetadata);
 
             const number = document.createElement('div');
             number.className = 'suggestion-number';
@@ -260,7 +261,7 @@ class ChatbotApp {
         return container;
     }
 
-    async executeCsvAction(actionId, csvPath) {
+    async executeCsvAction(actionId, csvPath, analysis) {
         if (this.isProcessing) return;
 
         this.isProcessing = true;
@@ -276,14 +277,23 @@ class ChatbotApp {
                     session_id: this.sessionId,
                     action_id: actionId,
                     csv_path: csvPath,
-                    analysis: {}
+                    analysis: analysis || {}
                 })
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
             const data = await response.json();
 
             this.removeTypingIndicator();
-            this.displayMessage(data.assistant_message);
+
+            if (data.assistant_message) {
+                this.displayMessage(data.assistant_message);
+            } else if (data.error) {
+                this.showError(data.error);
+            }
 
         } catch (error) {
             console.error('Error executing CSV action:', error);

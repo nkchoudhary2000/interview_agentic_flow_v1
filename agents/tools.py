@@ -17,10 +17,12 @@ class FileSystemTools:
         self.base_dir = base_dir
         self.generated_code_dir = base_dir / 'generated_code'
         self.raw_text_dir = base_dir / 'raw_text'
+        self.reports_dir = base_dir / 'reports'
         
         # Ensure directories exist
         self.generated_code_dir.mkdir(exist_ok=True)
         self.raw_text_dir.mkdir(exist_ok=True)
+        self.reports_dir.mkdir(exist_ok=True)
     
     def save_code_to_file(self, code: str, filename: str, language: str = 'python') -> dict:
         """
@@ -232,6 +234,253 @@ class FileSystemTools:
                 'status': 'error',
                 'content': '',
                 'message': f'Error reading file: {str(e)}'
+            }
+    
+    def calculate_detailed_statistics(self, csv_path: str) -> dict:
+        """
+        Calculate detailed statistics for all columns in CSV.
+        
+        Args:
+            csv_path: Path to the CSV file
+        
+        Returns:
+            dict with comprehensive statistics
+        """
+        try:
+            df = pd.read_csv(csv_path)
+            
+            stats_report = {
+                'numeric_columns': {},
+                'categorical_columns': {},
+                'overall': {
+                    'total_rows': int(len(df)),
+                    'total_columns': int(len(df.columns)),
+                    'memory_usage': int(df.memory_usage(deep=True).sum())
+                }
+            }
+            
+            # Numeric column statistics
+            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+            for col in numeric_cols:
+                stats_report['numeric_columns'][col] = {
+                    'count': int(df[col].count()),
+                    'mean': float(df[col].mean()) if not pd.isna(df[col].mean()) else 0.0,
+                    'std': float(df[col].std()) if not pd.isna(df[col].std()) else 0.0,
+                    'min': float(df[col].min()) if not pd.isna(df[col].min()) else 0.0,
+                    'max': float(df[col].max()) if not pd.isna(df[col].max()) else 0.0,
+                    '25%': float(df[col].quantile(0.25)) if not pd.isna(df[col].quantile(0.25)) else 0.0,
+                    '50%': float(df[col].quantile(0.50)) if not pd.isna(df[col].quantile(0.50)) else 0.0,
+                    '75%': float(df[col].quantile(0.75)) if not pd.isna(df[col].quantile(0.75)) else 0.0,
+                    'missing': int(df[col].isnull().sum())
+                }
+            
+            # Categorical column statistics
+            categorical_cols = df.select_dtypes(include=['object']).columns
+            for col in categorical_cols:
+                value_counts = df[col].value_counts().head(10).to_dict()
+                stats_report['categorical_columns'][col] = {
+                    'count': int(df[col].count()),
+                    'unique': int(df[col].nunique()),
+                    'top_values': {str(k): int(v) for k, v in value_counts.items()},
+                    'missing': int(df[col].isnull().sum())
+                }
+            
+            return {
+                'status': 'success',
+                'statistics': stats_report
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error calculating statistics: {str(e)}'
+            }
+    
+    def check_data_quality(self, csv_path: str) -> dict:
+        """
+        Perform data quality checks on CSV file.
+        
+        Args:
+            csv_path: Path to the CSV file
+        
+        Returns:
+            dict with quality check results
+        """
+        try:
+            df = pd.read_csv(csv_path)
+            
+            quality_report = {
+                'missing_values': {},
+                'duplicates': {
+                    'total_duplicates': int(df.duplicated().sum()),
+                    'duplicate_percentage': float((df.duplicated().sum() / len(df)) * 100)
+                },
+                'outliers': {},
+                'data_types': {}
+            }
+            
+            # Missing values analysis
+            for col in df.columns:
+                missing_count = int(df[col].isnull().sum())
+                if missing_count > 0:
+                    quality_report['missing_values'][col] = {
+                        'count': missing_count,
+                        'percentage': float((missing_count / len(df)) * 100)
+                    }
+            
+            # Outlier detection for numeric columns (using IQR method)
+            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+            for col in numeric_cols:
+                Q1 = df[col].quantile(0.25)
+                Q3 = df[col].quantile(0.75)
+                IQR = Q3 - Q1
+                outliers = df[(df[col] < (Q1 - 1.5 * IQR)) | (df[col] > (Q3 + 1.5 * IQR))]
+                
+                if len(outliers) > 0:
+                    quality_report['outliers'][col] = {
+                        'count': int(len(outliers)),
+                        'percentage': float((len(outliers) / len(df)) * 100)
+                    }
+            
+            # Data type information
+            for col in df.columns:
+                quality_report['data_types'][col] = str(df[col].dtype)
+            
+            return {
+                'status': 'success',
+                'quality_report': quality_report
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error checking data quality: {str(e)}'
+            }
+    
+    def generate_csv_report(self, csv_path: str, stats: dict, quality: dict) -> dict:
+        """
+        Generate an HTML report with statistics and quality checks.
+        
+        Args:
+            csv_path: Path to the CSV file
+            stats: Statistics dictionary
+            quality: Quality report dictionary
+        
+        Returns:
+            dict with report file path
+        """
+        try:
+            csv_name = Path(csv_path).stem
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            report_filename = f"{csv_name}_report_{timestamp}.html"
+            report_path = self.reports_dir / report_filename
+            
+            # Create HTML report
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>CSV Analysis Report - {csv_name}</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+                    .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                    h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }}
+                    h2 {{ color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }}
+                    h3 {{ color: #666; }}
+                    table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
+                    th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+                    th {{ background-color: #4CAF50; color: white; }}
+                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                    .metric {{ display: inline-block; margin: 10px 20px 10px 0; padding: 15px; background: #e8f5e9; border-radius: 5px; }}
+                    .metric-label {{ font-weight: bold; color: #2e7d32; }}
+                    .metric-value {{ font-size: 24px; color: #1b5e20; }}
+                    .warning {{ background-color: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0; }}
+                    .info {{ background-color: #d1ecf1; padding: 10px; border-left: 4px solid #17a2b8; margin: 10px 0; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📊 CSV Analysis Report</h1>
+                    <p><strong>File:</strong> {csv_name}</p>
+                    <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    
+                    <h2>Overall Statistics</h2>
+                    <div class="metric">
+                        <div class="metric-label">Total Rows</div>
+                        <div class="metric-value">{stats.get('overall', {}).get('total_rows', 'N/A')}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Total Columns</div>
+                        <div class="metric-value">{stats.get('overall', {}).get('total_columns', 'N/A')}</div>
+                    </div>
+                    
+                    <h2>Numeric Columns Statistics</h2>
+            """
+            
+            # Add numeric statistics table
+            if stats.get('numeric_columns'):
+                html_content += "<table><tr><th>Column</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th><th>Missing</th></tr>"
+                for col, col_stats in stats['numeric_columns'].items():
+                    html_content += f"""
+                    <tr>
+                        <td><strong>{col}</strong></td>
+                        <td>{col_stats.get('mean', 0):.2f}</td>
+                        <td>{col_stats.get('std', 0):.2f}</td>
+                        <td>{col_stats.get('min', 0):.2f}</td>
+                        <td>{col_stats.get('max', 0):.2f}</td>
+                        <td>{col_stats.get('missing', 0)}</td>
+                    </tr>
+                    """
+                html_content += "</table>"
+            
+            # Add categorical statistics
+            if stats.get('categorical_columns'):
+                html_content += "<h2>Categorical Columns</h2><table><tr><th>Column</th><th>Unique Values</th><th>Missing</th></tr>"
+                for col, col_stats in stats['categorical_columns'].items():
+                    html_content += f"""
+                    <tr>
+                        <td><strong>{col}</strong></td>
+                        <td>{col_stats.get('unique', 0)}</td>
+                        <td>{col_stats.get('missing', 0)}</td>
+                    </tr>
+                    """
+                html_content += "</table>"
+            
+            # Add quality report
+            html_content += "<h2>Data Quality Report</h2>"
+            
+            if quality.get('missing_values'):
+                html_content += '<div class="warning"><strong>⚠ Missing Values Detected</strong><ul>'
+                for col, info in quality['missing_values'].items():
+                    html_content += f"<li><strong>{col}</strong>: {info['count']} missing ({info['percentage']:.2f}%)</li>"
+                html_content += "</ul></div>"
+            
+            if quality.get('duplicates', {}).get('total_duplicates', 0) > 0:
+                html_content += f'<div class="warning"><strong>⚠ Duplicate Rows</strong><p>{quality["duplicates"]["total_duplicates"]} duplicate rows found ({quality["duplicates"]["duplicate_percentage"]:.2f}%)</p></div>'
+            
+            if quality.get('outliers'):
+                html_content += '<div class="info"><strong>ℹ Outliers Detected</strong><ul>'
+                for col, info in quality['outliers'].items():
+                    html_content += f"<li><strong>{col}</strong>: {info['count']} outliers ({info['percentage']:.2f}%)</li>"
+                html_content += "</ul></div>"
+            
+            html_content += """
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Save report
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            return {
+                'status': 'success',
+                'report_path': str(report_path),
+                'report_filename': report_filename
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error generating report: {str(e)}'
             }
     
     @staticmethod
